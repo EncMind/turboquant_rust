@@ -1,0 +1,33 @@
+[package]
+name = "turboquant-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "TurboQuant KV cache compression — pure Rust core library"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/turboquant-core"
+readme = "../README.md"
+keywords = ["quantization", "compression", "llm", "kv-cache", "ml"]
+categories = ["compression", "algorithms", "science"]
+
+[features]
+parallel = []
+accelerate = ["dep:cblas", "dep:accelerate-src"]
+
+[dependencies]
+rand = { workspace = true }
+rand_distr = { workspace = true }
+nalgebra = { workspace = true }
+statrs = { workspace = true }
+rayon = { workspace = true }
+cblas = { workspace = true, optional = true }
+accelerate-src = { workspace = true, optional = true }
+
+[dev-dependencies]
+approx = "0.5"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "bench_core"
+harness = false

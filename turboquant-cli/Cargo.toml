@@ -1,0 +1,26 @@
+[package]
+name = "turboquant-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "TurboQuant CLI — standalone compression demo and benchmarks"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/turboquant-cli"
+readme = "../README.md"
+keywords = ["quantization", "compression", "cli", "llm", "kv-cache"]
+categories = ["command-line-utilities", "compression", "science"]
+
+[[bin]]
+name = "turboquant"
+path = "src/main.rs"
+
+[features]
+default = []
+accelerate = ["turboquant-core/accelerate"]
+
+[dependencies]
+turboquant-core = { path = "../turboquant-core" }
+clap = { version = "4", features = ["derive"] }
+rand = { workspace = true }
+rand_distr = { workspace = true }

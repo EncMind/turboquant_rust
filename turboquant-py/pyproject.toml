@@ -1,0 +1,29 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "turboquant-rs"
+version = "0.1.0"
+description = "TurboQuant KV cache compression — Rust-accelerated Python bindings"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+keywords = ["quantization", "compression", "llm", "kv-cache", "rust"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Rust",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = ["numpy>=1.24"]
+
+[project.urls]
+Homepage = "https://github.com/weiwang/turboquant_plus"
+Repository = "https://github.com/weiwang/turboquant_plus"
+Documentation = "https://docs.rs/turboquant-core"
+Changelog = "https://github.com/weiwang/turboquant_plus/blob/main/rust/CHANGELOG.md"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]

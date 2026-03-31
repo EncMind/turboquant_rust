@@ -1,0 +1,25 @@
+[package]
+name = "turboquant-py"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "TurboQuant Python bindings via PyO3"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/turboquant-core"
+readme = "../README.md"
+keywords = ["quantization", "compression", "python", "llm", "kv-cache"]
+categories = ["compression", "science"]
+
+[lib]
+name = "turboquant_rs"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+accelerate = ["turboquant-core/accelerate"]
+
+[dependencies]
+turboquant-core = { path = "../turboquant-core" }
+pyo3 = { version = "0.23", features = ["extension-module"] }
+numpy = "0.23"

@@ -1,0 +1,21 @@
+[workspace]
+members = ["turboquant-core", "turboquant-py", "turboquant-cli"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "TurboQuant KV cache compression — Rust implementation"
+repository = "https://github.com/weiwang/turboquant_plus"
+homepage = "https://github.com/weiwang/turboquant_plus"
+documentation = "https://docs.rs/turboquant-core"
+
+[workspace.dependencies]
+rand = "0.9"
+rand_distr = "0.5"
+nalgebra = "0.33"
+statrs = "0.18"
+rayon = "1.10"
+cblas = "0.4"
+accelerate-src = "0.3"
