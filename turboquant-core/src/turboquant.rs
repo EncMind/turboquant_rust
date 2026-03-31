@@ -10,9 +10,9 @@
 //!
 //! Mirrors `turboquant/turboquant.py`.
 
+use crate::error::{Result, TurboQuantError};
 use crate::polar_quant::{PackedPolarQuantResult, PolarQuant, PolarQuantResult};
 use crate::qjl::{PackedQjlResult, Qjl, QjlResult};
-use crate::error::{Result, TurboQuantError};
 use std::mem::size_of;
 
 /// Container for a TurboQuant-compressed vector (or batch).
@@ -64,6 +64,7 @@ impl CompressedVector {
 /// let x_hat = tq.dequantize(&compressed).unwrap();
 /// assert_eq!(x_hat.len(), 16);
 /// ```
+#[derive(Clone)]
 pub struct TurboQuant {
     pub d: usize,
     pub bit_width: u32,
@@ -164,16 +165,15 @@ impl TurboQuant {
 
     /// Compute total storage in bits for `n_vectors` compressed vectors.
     pub fn compressed_size_bits(&self, n_vectors: usize) -> usize {
-        let mse_bytes = (n_vectors * self.d * (self.bit_width as usize - 1)).div_ceil(8);
-        let qjl_bytes = (n_vectors * self.d).div_ceil(8);
-        let norm_bytes = n_vectors * 2 * size_of::<f32>(); // PolarQuant norm + QJL residual norm
-        (mse_bytes + qjl_bytes + norm_bytes) * 8
+        let per_vector_bits = self.d * self.bit_width as usize; // (b-1) + 1 bits per coordinate
+        let norms_bits = size_of::<f32>() * 8; // Residual norm only (pure-Python semantics)
+        n_vectors * (per_vector_bits + norms_bits)
     }
 
     /// Compression ratio vs original precision.
     pub fn compression_ratio(&self, original_bits_per_value: usize) -> f64 {
         let original = self.d * original_bits_per_value;
-        let compressed = self.d * self.bit_width as usize + 64;
+        let compressed = self.d * self.bit_width as usize + 32;
         original as f64 / compressed as f64
     }
 }
@@ -181,6 +181,7 @@ impl TurboQuant {
 /// MSE-only TurboQuant (Algorithm 1) — no QJL stage.
 ///
 /// Use for V cache compression where MSE matters more than inner product.
+#[derive(Clone)]
 pub struct TurboQuantMse {
     pub d: usize,
     pub bit_width: u32,
@@ -211,7 +212,11 @@ impl TurboQuantMse {
     }
 
     /// Quantize a batch to packed payload format.
-    pub fn quantize_packed(&self, batch: &[f64], batch_size: usize) -> Result<PackedPolarQuantResult> {
+    pub fn quantize_packed(
+        &self,
+        batch: &[f64],
+        batch_size: usize,
+    ) -> Result<PackedPolarQuantResult> {
         self.polar_quant.quantize_batch_packed(batch, batch_size)
     }
 
@@ -273,7 +278,7 @@ mod tests {
     fn test_turboquant_compression_ratio() {
         let tq = TurboQuant::new(128, 3, 42, true).unwrap();
         let ratio = tq.compression_ratio(16);
-        // 128*16 / (128*3 + 64) = 2048/448 ≈ 4.57
+        // 128*16 / (128*3 + 32) = 2048/416 ≈ 4.92
         assert!(ratio > 4.0 && ratio < 6.0, "ratio = {ratio}");
     }
 

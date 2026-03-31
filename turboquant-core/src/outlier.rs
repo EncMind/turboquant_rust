@@ -3,8 +3,8 @@
 //! Split channels into outlier (higher bits) and non-outlier (lower bits) to achieve
 //! fractional average bit rates like 2.5 or 3.5 bits per channel.
 //!
-//! Outlier channels are selected per batch using value magnitude statistics
-//! (largest average absolute activations), then stored in the compressed payload.
+//! Outlier channels are fixed-position (prefix/suffix split) to mirror the
+//! pure-Python reference implementation.
 //!
 //! Examples:
 //! - 2.5-bit: 50% channels at 3 bits + 50% at 2 bits
@@ -12,9 +12,9 @@
 //!
 //! Mirrors `turboquant/outlier.py`.
 
+use crate::error::{Result, TurboQuantError};
 use crate::polar_quant::{PackedPolarQuantResult, PolarQuant};
 use crate::qjl::{PackedQjlResult, Qjl};
-use crate::error::{Result, TurboQuantError};
 
 /// Channel split configuration.
 struct ChannelSplit {
@@ -47,13 +47,12 @@ pub struct OutlierCompressed {
     pub outlier: Option<PackedPolarQuantResult>,
     pub normal: Option<PackedPolarQuantResult>,
     pub qjl: PackedQjlResult,
-    /// Selected outlier channel indices for this compressed batch.
-    pub outlier_indices: Vec<usize>,
     pub effective_bits: f64,
     pub batch_size: usize,
 }
 
 /// TurboQuant with outlier channel strategy for non-integer bit rates.
+#[derive(Clone)]
 pub struct OutlierTurboQuant {
     pub d: usize,
     pub target_bits: f64,
@@ -62,62 +61,14 @@ pub struct OutlierTurboQuant {
     pub high_bits: u32,
     pub low_bits: u32,
     pub effective_bits: f64,
+    outlier_idx: Vec<usize>,
+    normal_idx: Vec<usize>,
     pq_outlier: Option<PolarQuant>,
     pq_normal: Option<PolarQuant>,
     qjl: Qjl,
 }
 
 impl OutlierTurboQuant {
-    fn select_outlier_indices(&self, batch: &[f64], batch_size: usize) -> Vec<usize> {
-        if self.n_outlier == 0 || batch_size == 0 {
-            return vec![];
-        }
-        // Score channels by average absolute magnitude over the batch.
-        let mut scores = vec![0.0f64; self.d];
-        for i in 0..batch_size {
-            let row = &batch[i * self.d..(i + 1) * self.d];
-            for (j, &v) in row.iter().enumerate() {
-                scores[j] += v.abs();
-            }
-        }
-
-        let mut ranked: Vec<usize> = (0..self.d).collect();
-        ranked.sort_by(|&a, &b| scores[b].total_cmp(&scores[a]).then_with(|| a.cmp(&b)));
-        let mut outliers = ranked[..self.n_outlier].to_vec();
-        outliers.sort_unstable();
-        outliers
-    }
-
-    fn validate_outlier_indices(&self, outlier_indices: &[usize]) -> Result<()> {
-        if outlier_indices.len() != self.n_outlier {
-            return Err(TurboQuantError::LengthMismatch {
-                param: "outlier_indices",
-                expected: self.n_outlier,
-                got: outlier_indices.len(),
-            });
-        }
-
-        let mut seen = vec![false; self.d];
-        for &idx in outlier_indices {
-            if idx >= self.d {
-                return Err(TurboQuantError::InvalidOutlierIndex { index: idx, d: self.d });
-            }
-            if seen[idx] {
-                return Err(TurboQuantError::DuplicateOutlierIndex { index: idx });
-            }
-            seen[idx] = true;
-        }
-        Ok(())
-    }
-
-    fn normal_indices_from_outliers(&self, outlier_indices: &[usize]) -> Vec<usize> {
-        let mut is_outlier = vec![false; self.d];
-        for &idx in outlier_indices {
-            is_outlier[idx] = true;
-        }
-        (0..self.d).filter(|&i| !is_outlier[i]).collect()
-    }
-
     /// Create a new outlier-strategy quantizer.
     ///
     /// # Arguments
@@ -152,6 +103,9 @@ impl OutlierTurboQuant {
             + split.n_normal as f64 * split.low_bits as f64)
             / d as f64;
 
+        let outlier_idx: Vec<usize> = (0..split.n_outlier).collect();
+        let normal_idx: Vec<usize> = (split.n_outlier..d).collect();
+
         // PolarQuant bit-width is (total - 1) since QJL adds 1 bit
         let pq_outlier = if split.n_outlier > 0 {
             Some(PolarQuant::new(
@@ -184,10 +138,37 @@ impl OutlierTurboQuant {
             high_bits: split.high_bits,
             low_bits: split.low_bits,
             effective_bits,
+            outlier_idx,
+            normal_idx,
             pq_outlier,
             pq_normal,
             qjl,
         })
+    }
+
+    /// Fixed outlier channel indices (prefix split), matching pure-Python behavior.
+    pub fn outlier_indices(&self) -> &[usize] {
+        &self.outlier_idx
+    }
+
+    /// Fixed normal channel indices (suffix split), matching pure-Python behavior.
+    pub fn normal_indices(&self) -> &[usize] {
+        &self.normal_idx
+    }
+
+    /// Outlier-stream PolarQuant instance (high-bit channels), if present.
+    pub fn outlier_quantizer(&self) -> Option<&PolarQuant> {
+        self.pq_outlier.as_ref()
+    }
+
+    /// Normal-stream PolarQuant instance (low-bit channels), if present.
+    pub fn normal_quantizer(&self) -> Option<&PolarQuant> {
+        self.pq_normal.as_ref()
+    }
+
+    /// QJL instance used for residual correction.
+    pub fn qjl_quantizer(&self) -> &Qjl {
+        &self.qjl
     }
 
     /// Quantize a batch of vectors with outlier channel split.
@@ -203,26 +184,15 @@ impl OutlierTurboQuant {
             });
         }
 
-        let outlier_indices = self.select_outlier_indices(batch, batch_size);
-        let normal_indices = self.normal_indices_from_outliers(&outlier_indices);
-        self.validate_outlier_indices(&outlier_indices)?;
-        if normal_indices.len() != self.n_normal {
-            return Err(TurboQuantError::LengthMismatch {
-                param: "normal_indices",
-                expected: self.n_normal,
-                got: normal_indices.len(),
-            });
-        }
-
-        // Split channels
+        // Split channels by fixed prefix/suffix indices.
         let mut outlier_data = Vec::with_capacity(batch_size * self.n_outlier);
         let mut normal_data = Vec::with_capacity(batch_size * self.n_normal);
         for i in 0..batch_size {
             let row = &batch[i * self.d..(i + 1) * self.d];
-            for &idx in &outlier_indices {
+            for &idx in &self.outlier_idx {
                 outlier_data.push(row[idx]);
             }
-            for &idx in &normal_indices {
+            for &idx in &self.normal_idx {
                 normal_data.push(row[idx]);
             }
         }
@@ -252,10 +222,10 @@ impl OutlierTurboQuant {
         // Reconstruct full residual
         let mut full_residual = vec![0.0; batch_size * self.d];
         for i in 0..batch_size {
-            for (k, &idx) in outlier_indices.iter().enumerate() {
+            for (k, &idx) in self.outlier_idx.iter().enumerate() {
                 full_residual[i * self.d + idx] = out_residual[i * self.n_outlier + k];
             }
-            for (k, &idx) in normal_indices.iter().enumerate() {
+            for (k, &idx) in self.normal_idx.iter().enumerate() {
                 full_residual[i * self.d + idx] = norm_residual[i * self.n_normal + k];
             }
         }
@@ -267,7 +237,6 @@ impl OutlierTurboQuant {
             outlier: outlier_packed,
             normal: normal_packed,
             qjl: qjl_result,
-            outlier_indices,
             effective_bits: self.effective_bits,
             batch_size,
         })
@@ -276,17 +245,13 @@ impl OutlierTurboQuant {
     /// Dequantize outlier-strategy compressed vectors.
     pub fn dequantize(&self, compressed: &OutlierCompressed) -> Result<Vec<f64>> {
         let batch_size = compressed.batch_size;
-        self.validate_outlier_indices(&compressed.outlier_indices)?;
-        let normal_indices = self.normal_indices_from_outliers(&compressed.outlier_indices);
 
         // Reconstruct outlier channels
         let outlier_recon = if let Some(ref pq) = self.pq_outlier {
             let packed = compressed
                 .outlier
                 .as_ref()
-                .ok_or(TurboQuantError::MissingPayload {
-                    field: "outlier",
-                })?;
+                .ok_or(TurboQuantError::MissingPayload { field: "outlier" })?;
             pq.dequantize_batch_packed(packed)?
         } else {
             vec![0.0; batch_size * self.n_outlier]
@@ -310,11 +275,11 @@ impl OutlierTurboQuant {
         let mut output = vec![0.0; batch_size * self.d];
         for i in 0..batch_size {
             // Outlier channels
-            for (k, &idx) in compressed.outlier_indices.iter().enumerate() {
+            for (k, &idx) in self.outlier_idx.iter().enumerate() {
                 output[i * self.d + idx] = outlier_recon[i * self.n_outlier + k];
             }
             // Normal channels
-            for (k, &idx) in normal_indices.iter().enumerate() {
+            for (k, &idx) in self.normal_idx.iter().enumerate() {
                 output[i * self.d + idx] = normal_recon[i * self.n_normal + k];
             }
             // Add QJL residual
@@ -328,14 +293,8 @@ impl OutlierTurboQuant {
 
     /// Compression ratio vs original precision.
     pub fn compression_ratio(&self, original_bits: usize) -> f64 {
-        let mut n_norm_streams = 1usize; // QJL residual norm
-        if self.n_outlier > 0 {
-            n_norm_streams += 1;
-        }
-        if self.n_normal > 0 {
-            n_norm_streams += 1;
-        }
-        let per_vector_bits = self.d as f64 * self.effective_bits + (n_norm_streams * 32) as f64;
+        // Pure-Python formula: effective bits + 32-bit QJL norm + two 32-bit PQ norms.
+        let per_vector_bits = self.d as f64 * self.effective_bits + 96.0;
         let original = (self.d * original_bits) as f64;
         original / per_vector_bits
     }

@@ -10,7 +10,6 @@
 //! Mirrors `turboquant/kv_cache.py`.
 
 use rayon::prelude::*;
-use std::mem::size_of;
 
 use crate::error::{Result, TurboQuantError};
 use crate::polar_quant::PackedPolarQuantResult;
@@ -148,19 +147,23 @@ impl KvCacheCompressor {
         // Parallel over layers, each layer parallel over heads
         let results: Result<Vec<Vec<(CompressedVector, PackedPolarQuantResult)>>> = (0..num_layers)
             .into_par_iter()
-            .map(|layer| -> Result<Vec<(CompressedVector, PackedPolarQuantResult)>> {
-                (0..num_heads)
-                    .into_par_iter()
-                    .map(|head| -> Result<(CompressedVector, PackedPolarQuantResult)> {
-                        let offset = layer * layer_stride + head * head_stride;
-                        let k_vecs = &k_cache[offset..offset + head_stride];
-                        let v_vecs = &v_cache[offset..offset + head_stride];
-                        let k_comp = self.k_quantizer.quantize(k_vecs, seq_len)?;
-                        let v_comp = self.v_quantizer.quantize_packed(v_vecs, seq_len)?;
-                        Ok((k_comp, v_comp))
-                    })
-                    .collect()
-            })
+            .map(
+                |layer| -> Result<Vec<(CompressedVector, PackedPolarQuantResult)>> {
+                    (0..num_heads)
+                        .into_par_iter()
+                        .map(
+                            |head| -> Result<(CompressedVector, PackedPolarQuantResult)> {
+                                let offset = layer * layer_stride + head * head_stride;
+                                let k_vecs = &k_cache[offset..offset + head_stride];
+                                let v_vecs = &v_cache[offset..offset + head_stride];
+                                let k_comp = self.k_quantizer.quantize(k_vecs, seq_len)?;
+                                let v_comp = self.v_quantizer.quantize_packed(v_vecs, seq_len)?;
+                                Ok((k_comp, v_comp))
+                            },
+                        )
+                        .collect()
+                },
+            )
             .collect();
         let results = results?;
 
@@ -285,42 +288,36 @@ impl KvCacheCompressor {
     /// Compute memory usage statistics.
     pub fn memory_stats(&self, seq_len: usize, num_layers: usize, num_heads: usize) -> MemoryStats {
         let n_vectors = num_layers * num_heads * seq_len;
-        let n_heads_total = num_layers * num_heads;
-        let original_bytes = n_vectors * self.head_dim * 2 * 2; // fp16 K + fp16 V
+        let original_bytes = n_vectors * self.head_dim * 2; // fp16
 
-        let k_mse_bytes_per_head =
-            (seq_len * self.head_dim * (self.k_bits as usize - 1)).div_ceil(8);
-        let k_qjl_bytes_per_head = (seq_len * self.head_dim).div_ceil(8);
-        let k_norm_bytes_per_head = seq_len * 2 * size_of::<f32>(); // mse norm + qjl norm
-        let v_indices_bytes_per_head = (seq_len * self.head_dim * self.v_bits as usize).div_ceil(8);
-        let v_norm_bytes_per_head = seq_len * size_of::<f32>(); // mse norm
-
-        let wire_bytes = n_heads_total
-            * (k_mse_bytes_per_head
-                + k_qjl_bytes_per_head
-                + k_norm_bytes_per_head
-                + v_indices_bytes_per_head
-                + v_norm_bytes_per_head);
-
-        // Payload + container metadata assuming Vec capacity ~= length.
-        let in_memory_bytes = wire_bytes
-            + size_of::<CompressedKvCache>()
-            + num_layers * size_of::<Vec<CompressedVector>>()
-            + num_layers * size_of::<Vec<PackedPolarQuantResult>>()
-            + n_heads_total * size_of::<CompressedVector>()
-            + n_heads_total * size_of::<PackedPolarQuantResult>();
+        // Pure-Python semantics:
+        // K: b bits/coord + 32-bit norm, V: b bits/coord (no norm stream).
+        let k_bits_total = n_vectors * (self.head_dim * self.k_bits as usize + 32);
+        let v_bits_total = n_vectors * self.head_dim * self.v_bits as usize;
+        let compressed_bytes = (k_bits_total + v_bits_total) as f64 / 8.0;
+        let compression_ratio = original_bytes as f64 / compressed_bytes;
 
         MemoryStats {
             original_mb: original_bytes as f64 / 1024.0 / 1024.0,
-            wire_compressed_mb: wire_bytes as f64 / 1024.0 / 1024.0,
-            in_memory_mb: in_memory_bytes as f64 / 1024.0 / 1024.0,
-            wire_compression_ratio: original_bytes as f64 / wire_bytes as f64,
-            in_memory_compression_ratio: original_bytes as f64 / in_memory_bytes as f64,
-            compressed_mb: wire_bytes as f64 / 1024.0 / 1024.0,
-            compression_ratio: original_bytes as f64 / wire_bytes as f64,
+            wire_compressed_mb: compressed_bytes / 1024.0 / 1024.0,
+            in_memory_mb: compressed_bytes / 1024.0 / 1024.0,
+            wire_compression_ratio: compression_ratio,
+            in_memory_compression_ratio: compression_ratio,
+            compressed_mb: compressed_bytes / 1024.0 / 1024.0,
+            compression_ratio,
             k_bits_per_value: self.k_bits,
             v_bits_per_value: self.v_bits,
         }
+    }
+
+    /// K-cache quantizer (TurboQuant).
+    pub fn k_quantizer(&self) -> &TurboQuant {
+        &self.k_quantizer
+    }
+
+    /// V-cache quantizer (TurboQuantMse).
+    pub fn v_quantizer(&self) -> &TurboQuantMse {
+        &self.v_quantizer
     }
 }
 

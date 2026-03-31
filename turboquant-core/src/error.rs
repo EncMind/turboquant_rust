@@ -151,14 +151,20 @@ impl Display for TurboQuantError {
             }
             Self::MissingPayload { field } => write!(f, "missing payload: {field}"),
             Self::InvalidOutlierIndex { index, d } => {
-                write!(f, "outlier index {index} is out of bounds for dimension {d}")
+                write!(
+                    f,
+                    "outlier index {index} is out of bounds for dimension {d}"
+                )
             }
             Self::DuplicateOutlierIndex { index } => write!(f, "duplicate outlier index {index}"),
             Self::InvalidPackedMetadata {
                 param,
                 expected,
                 got,
-            } => write!(f, "invalid packed metadata for {param}: expected {expected}, got {got}"),
+            } => write!(
+                f,
+                "invalid packed metadata for {param}: expected {expected}, got {got}"
+            ),
             Self::Internal { context, message } => write!(f, "{context}: {message}"),
         }
     }

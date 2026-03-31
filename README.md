@@ -57,17 +57,17 @@ cargo run --release -p turboquant-cli --features accelerate -- bench --dim 128 -
 
 | Operation | Pure Python | Python+Rust (PyO3) | Pure Rust (CLI) | Speedup |
 |---|---:|---:|---:|---:|
-| Fast Walsh-Hadamard (d=128) | 240 us | 1.8 us | **1.1 us** | **218x** |
-| Nearest centroid (3-bit) | 4.8 us | 1.6 us | **0.9 us** | **5.3x** |
-| Pack bits (d=128) | 3.7 us | 0.7 us | **0.2 us** | **19x** |
+| Fast Walsh-Hadamard (d=128) | 282 us | 2.3 us | **1.2 us** | **235x** |
+| Nearest centroid (3-bit) | 6.7 us | 2.0 us | **1.0 us** | **6.7x** |
+| Pack bits (d=128) | 5.5 us | 1.0 us | **0.2 us** | **28x** |
 
 ### Single-Vector Roundtrip (quantize + dequantize, d=128)
 
 | Format | Pure Python | Python+Rust (PyO3) | Pure Rust (CLI) | Speedup |
 |---|---:|---:|---:|---:|
-| turbo2 (2-bit) | 124 us | 81 us | **68 us** | **1.8x** |
-| turbo3 (3-bit) | 133 us | 74 us | **69 us** | **1.9x** |
-| turbo4 (4-bit) | 125 us | 70 us | **69 us** | **1.8x** |
+| turbo2 (2-bit) | 215 us | 92 us | **77 us** | **2.8x** |
+| turbo3 (3-bit) | 218 us | 79 us | **80 us** | **2.8x** |
+| turbo4 (4-bit) | 197 us | 78 us | **79 us** | **2.5x** |
 
 Python+Rust and Pure Rust single-vector latencies are within ~15% of each other,
 confirming they run the same compiled Rust code.
@@ -76,9 +76,9 @@ confirming they run the same compiled Rust code.
 
 | Format | Pure Python (vec/s) | Python+Rust (vec/s) | Pure Rust (vec/s) | Speedup |
 |---|---:|---:|---:|---:|
-| turbo2 (2-bit) | 170,000 | 244,000 | **220,000** | **1.4x** |
-| turbo3 (3-bit) | 140,000 | 243,000 | **246,000** | **1.8x** |
-| turbo4 (4-bit) | 132,000 | 238,000 | **228,000** | **1.8x** |
+| turbo2 (2-bit) | 139,000 | 243,000 | **204,000** | **1.7x** |
+| turbo3 (3-bit) | 123,000 | 227,000 | **224,000** | **1.8x** |
+| turbo4 (4-bit) | 125,000 | 209,000 | **190,000** | **1.7x** |
 
 ### CLI End-to-End (Pure Rust, 10,000 vectors, packed wire format)
 
@@ -86,17 +86,17 @@ Latency (median of 9 samples per stage):
 
 | Format | Compress | Decompress | Roundtrip | Ratio |
 |---|---:|---:|---:|---:|
-| turbo2 | 54,942 us | 37,890 us | 92,892 us | 6.40x |
-| turbo3 | 63,304 us | 39,857 us | 102,825 us | 4.57x |
-| turbo4 | 67,719 us | 43,189 us | 111,537 us | 3.56x |
+| turbo2 | 62,594 us | 42,088 us | 101,517 us | 7.11x |
+| turbo3 | 69,707 us | 48,726 us | 123,224 us | 4.92x |
+| turbo4 | 75,744 us | 52,473 us | 130,113 us | 3.76x |
 
 Throughput (median of 9 roundtrips):
 
 | Format | Throughput (vec/s) |
 |---|---:|
-| turbo2 | **108,325** |
-| turbo3 | **95,007** |
-| turbo4 | **105,926** |
+| turbo2 | **105,293** |
+| turbo3 | **86,451** |
+| turbo4 | **85,669** |
 
 Note: `bench` uses packed `quantize`/`dequantize` (includes wire-format
 packing overhead), so throughput is lower than the unpacked 3-way comparison
@@ -122,58 +122,65 @@ above.
 
 ## Quick Start
 
-### Build & Test
+### Build & Test (Rust only — no Python needed)
 
 ```bash
 cd rust
-cargo test                  # Run all 153 tests
-cargo build --release       # Build optimized binaries (portable backend)
+cargo test                  # Run all 153 Rust tests
+cargo build --release       # Build optimized binaries
+```
+
+### Build & Test (Python bindings)
+
+Requires: Python 3.9+, [maturin](https://maturin.rs/) (`pip install maturin`), numpy
+
+```bash
+cd rust/turboquant-py
+
+# Build and install the Rust extension into your Python environment
+pip install maturin
+maturin develop --release --features accelerate   # macOS (Apple Accelerate BLAS)
+maturin develop --release                          # Linux/other (pure Rust BLAS)
+
+# Run PyO3 binding tests (40 tests covering 1D/2D/batch roundtrips)
+pip install pytest
+pytest tests/ -v
 ```
 
 ### Run Benchmarks
 
 ```bash
-# Criterion micro-benchmarks
+# Criterion micro-benchmarks (Rust)
 cargo bench -p turboquant-core --features accelerate
 
 # CLI benchmarks
-cargo run --release -p turboquant-cli -- bench --count 10000
-cargo run --release -p turboquant-cli -- demo --count 1000
-cargo run --release -p turboquant-cli -- info
-
-# macOS Accelerate backend (optional)
 cargo run --release -p turboquant-cli --features accelerate -- bench --count 10000
+cargo run --release -p turboquant-cli --features accelerate -- demo --count 1000
+cargo run --release -p turboquant-cli -- info
 
 # Machine-readable benchmark output (for regression tracking)
 cargo run --release -p turboquant-cli --features accelerate -- bench-json --dim 128 --count 1000 --iter 5000 --seed 42
 ```
 
-### Python Bindings
+### Python Usage
 
-```bash
-cd rust/turboquant-py
-pip install maturin
-maturin develop --release
-
-# macOS Accelerate backend (optional)
-maturin develop --release --features accelerate
-
-# Then in Python:
+```python
 import turboquant_rs
 
 # Drop-in accelerated primitives
-result = turboquant_rs.fast_walsh_hadamard_transform(x)   # ~218x faster
+result = turboquant_rs.fast_walsh_hadamard_transform(x)   # ~235x faster
 indices = turboquant_rs.nearest_centroid_indices(values, centroids)
 packed = turboquant_rs.pack_bits(signs)
 
-# Full quantizer objects (unpacked path — fastest for in-memory use)
+# Full quantizer objects — accepts 1D (single vector) or 2D (batch, d)
 tq = turboquant_rs.TurboQuant(d=128, bit_width=3, seed=42)
-compressed = tq.quantize_unpacked(data, batch_size)
-reconstructed = tq.dequantize_unpacked(compressed)
-
-# Packed wire format (for storage/serialization)
-compressed = tq.quantize(data, batch_size)
+compressed = tq.quantize(x)           # x: (128,) or (batch, 128)
 reconstructed = tq.dequantize(compressed)
+
+# KV cache compression
+compressor = turboquant_rs.KVCacheCompressor(head_dim=128, k_bits=3, v_bits=3)
+compressed = compressor.compress(k_cache, v_cache)  # 4D numpy arrays
+k_hat, v_hat = compressor.decompress(compressed)
 ```
 
 ### Using as a Rust Library

@@ -101,6 +101,7 @@ impl PackedQjlResult {
 ///
 /// Stores a full `d x d` random projection matrix. For production use at large `d`,
 /// a structured/seeded approach would reduce memory.
+#[derive(Clone)]
 pub struct Qjl {
     pub d: usize,
     /// Random projection matrix S, shape `(d, d)`, entries ~ N(0, 1).
@@ -124,6 +125,19 @@ impl Qjl {
         let mut rng = StdRng::seed_from_u64(seed);
         let s = DMatrix::from_fn(d, d, |_, _| StandardNormal.sample(&mut rng));
         Ok(Self { d, s })
+    }
+
+    /// Return the projection matrix as a row-major flat buffer.
+    ///
+    /// This is exposed for Python API parity (`QJL.S`).
+    pub fn projection_matrix_row_major(&self) -> Vec<f64> {
+        let mut out = Vec::with_capacity(self.d * self.d);
+        for i in 0..self.d {
+            for j in 0..self.d {
+                out.push(self.s[(i, j)]);
+            }
+        }
+        out
     }
 
     /// Quantize a single residual vector to sign bits.
@@ -212,7 +226,11 @@ impl Qjl {
     }
 
     /// Quantize and return packed payload.
-    pub fn quantize_batch_packed(&self, batch: &[f64], batch_size: usize) -> Result<PackedQjlResult> {
+    pub fn quantize_batch_packed(
+        &self,
+        batch: &[f64],
+        batch_size: usize,
+    ) -> Result<PackedQjlResult> {
         self.quantize_batch(batch, batch_size)?.pack(self.d)
     }
 
@@ -225,11 +243,7 @@ impl Qjl {
                 got: signs.len(),
             });
         }
-        if let Some((index, &value)) = signs
-            .iter()
-            .enumerate()
-            .find(|(_, &s)| s != -1 && s != 1)
-        {
+        if let Some((index, &value)) = signs.iter().enumerate().find(|(_, &s)| s != -1 && s != 1) {
             return Err(TurboQuantError::InvalidSignValue {
                 param: "signs",
                 index,

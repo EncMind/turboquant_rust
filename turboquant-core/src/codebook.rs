@@ -9,9 +9,9 @@
 //!
 //! Mirrors `turboquant/codebook.py`.
 
+use crate::error::{Result, TurboQuantError};
 use statrs::distribution::{ContinuousCDF, Normal};
 use std::f64::consts::PI;
-use crate::error::{Result, TurboQuantError};
 
 /// Compute optimal MSE centroids for the post-rotation coordinate distribution.
 ///
@@ -46,7 +46,12 @@ pub fn optimal_centroids(bit_width: u32, d: usize) -> Result<Vec<f64>> {
 
     if bit_width == 2 {
         let scale = 1.0 / (d as f64).sqrt();
-        return Ok(vec![-1.51 * scale, -0.453 * scale, 0.453 * scale, 1.51 * scale]);
+        return Ok(vec![
+            -1.51 * scale,
+            -0.453 * scale,
+            0.453 * scale,
+            1.51 * scale,
+        ]);
     }
 
     // For b >= 3, use Lloyd's algorithm on N(0, 1/d)
@@ -83,11 +88,8 @@ fn lloyds_gaussian(n_centroids: usize, sigma: f64, n_iter: usize) -> Result<Vec<
     for i in 1..n_centroids - 1 {
         centroids[i] = gaussian_conditional_expectation(sigma, boundaries[i - 1], boundaries[i])?;
     }
-    centroids[n_centroids - 1] = gaussian_conditional_expectation(
-        sigma,
-        boundaries[n_centroids - 2],
-        f64::INFINITY,
-    )?;
+    centroids[n_centroids - 1] =
+        gaussian_conditional_expectation(sigma, boundaries[n_centroids - 2], f64::INFINITY)?;
 
     for _ in 0..n_iter {
         // Update boundaries (midpoints between consecutive centroids)
@@ -101,11 +103,8 @@ fn lloyds_gaussian(n_centroids: usize, sigma: f64, n_iter: usize) -> Result<Vec<
             centroids[i] =
                 gaussian_conditional_expectation(sigma, boundaries[i - 1], boundaries[i])?;
         }
-        centroids[n_centroids - 1] = gaussian_conditional_expectation(
-            sigma,
-            boundaries[n_centroids - 2],
-            f64::INFINITY,
-        )?;
+        centroids[n_centroids - 1] =
+            gaussian_conditional_expectation(sigma, boundaries[n_centroids - 2], f64::INFINITY)?;
     }
 
     centroids.sort_by(|a, b| a.total_cmp(b));

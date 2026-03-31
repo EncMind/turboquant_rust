@@ -6,10 +6,10 @@
 //!
 //! Mirrors `turboquant/rotation.py`.
 
+use crate::error::{Result, TurboQuantError};
 use nalgebra::{DMatrix, DVector};
 use rand::Rng;
 use rand_distr::StandardNormal;
-use crate::error::{Result, TurboQuantError};
 
 /// Generate a Haar-distributed random rotation matrix via QR decomposition.
 ///

@@ -177,8 +177,14 @@ fn test_deterministic() {
     let c1 = tq1.quantize(&x, 1).unwrap();
     let c2 = tq2.quantize(&x, 1).unwrap();
 
-    assert_eq!(c1.mse.unpack_indices().unwrap(), c2.mse.unpack_indices().unwrap());
-    assert_eq!(c1.qjl.unpack_signs().unwrap(), c2.qjl.unpack_signs().unwrap());
+    assert_eq!(
+        c1.mse.unpack_indices().unwrap(),
+        c2.mse.unpack_indices().unwrap()
+    );
+    assert_eq!(
+        c1.qjl.unpack_signs().unwrap(),
+        c2.qjl.unpack_signs().unwrap()
+    );
 }
 
 // ============================================================
@@ -374,7 +380,7 @@ fn test_norm_correction_can_be_disabled() {
 fn test_size_calculation() {
     let tq = TurboQuant::new(128, 3, 42, true).unwrap();
     let bits = tq.compressed_size_bits(100);
-    assert_eq!(bits, 100 * (128 * 3 + 64));
+    assert_eq!(bits, 100 * (128 * 3 + 32));
 }
 
 #[test]

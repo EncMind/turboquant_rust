@@ -100,7 +100,11 @@ impl PackedPolarQuantResult {
     /// Unpack to raw per-coordinate indices and f64 norms.
     pub fn unpack(&self) -> Result<PolarQuantResult> {
         Ok(PolarQuantResult {
-            indices: unpack_indices(&self.packed_indices, self.batch_size * self.d, self.bit_width)?,
+            indices: unpack_indices(
+                &self.packed_indices,
+                self.batch_size * self.d,
+                self.bit_width,
+            )?,
             norms: self.norms.iter().map(|&n| n as f64).collect(),
             batch_size: self.batch_size,
         })
@@ -108,7 +112,11 @@ impl PackedPolarQuantResult {
 
     /// Unpack only centroid indices.
     pub fn unpack_indices(&self) -> Result<Vec<u8>> {
-        unpack_indices(&self.packed_indices, self.batch_size * self.d, self.bit_width)
+        unpack_indices(
+            &self.packed_indices,
+            self.batch_size * self.d,
+            self.bit_width,
+        )
     }
 
     /// Payload size for packed wire format.
@@ -253,8 +261,8 @@ impl PolarQuant {
         batch: &[f64],
         batch_size: usize,
     ) -> Result<PackedPolarQuantResult> {
-        self.quantize_batch(batch, batch_size)
-            ?.pack(self.d, self.bit_width as u8)
+        self.quantize_batch(batch, batch_size)?
+            .pack(self.d, self.bit_width as u8)
     }
 
     /// Dequantize a single vector from indices and norm.
@@ -343,7 +351,11 @@ impl PolarQuant {
 
         // residual = x - x_hat
         let mut residual = vec![0.0; batch.len()];
-        for ((out, &x), &xh) in residual.iter_mut().zip(batch.iter()).zip(reconstructed.iter()) {
+        for ((out, &x), &xh) in residual
+            .iter_mut()
+            .zip(batch.iter())
+            .zip(reconstructed.iter())
+        {
             *out = x - xh;
         }
 

@@ -98,38 +98,17 @@ fn test_batch_matches_single() {
     let batch_comp = oq.quantize(&flat, n).unwrap();
     let batch_recon = oq.dequantize(&batch_comp).unwrap();
 
-    // Single path can choose different outlier channels than the batch path.
-    // Compare reconstruction quality rather than elementwise identity.
-    let mut mse_batch_total = 0.0;
-    let mut mse_single_total = 0.0;
     for i in 0..n {
-        let x = &vectors[i];
         let batch_vec = &batch_recon[i * d..(i + 1) * d];
         let single_comp = oq.quantize(&vectors[i], 1).unwrap();
         let single_recon = oq.dequantize(&single_comp).unwrap();
-        let mse_batch: f64 = x
-            .iter()
-            .zip(batch_vec.iter())
-            .map(|(a, b)| (a - b).powi(2))
-            .sum::<f64>()
-            / d as f64;
-        let mse_single: f64 = x
-            .iter()
-            .zip(single_recon.iter())
-            .map(|(a, b)| (a - b).powi(2))
-            .sum::<f64>()
-            / d as f64;
-        mse_batch_total += mse_batch;
-        mse_single_total += mse_single;
+        for j in 0..d {
+            assert!(
+                (batch_vec[j] - single_recon[j]).abs() < 1e-10,
+                "mismatch at [{i},{j}]"
+            );
+        }
     }
-
-    let avg_batch = mse_batch_total / n as f64;
-    let avg_single = mse_single_total / n as f64;
-    assert!(avg_batch.is_finite() && avg_single.is_finite());
-    assert!(
-        avg_batch < avg_single * 2.0 && avg_single < avg_batch * 2.0,
-        "batch/single quality diverged too much: avg_batch={avg_batch:.5}, avg_single={avg_single:.5}"
-    );
 }
 
 #[test]

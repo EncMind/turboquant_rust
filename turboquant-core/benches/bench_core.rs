@@ -309,18 +309,21 @@ fn bench_kv_cache(c: &mut Criterion) {
         let label = format!("compress_k{k_bits}v{v_bits}_L{num_layers}H{num_heads}S{seq_len}");
         group.bench_function(&label, |b| {
             b.iter(|| {
-                compressor.compress(
-                    black_box(&k_cache),
-                    black_box(&v_cache),
-                    num_layers,
-                    num_heads,
-                    seq_len,
-                ).unwrap()
+                compressor
+                    .compress(
+                        black_box(&k_cache),
+                        black_box(&v_cache),
+                        num_layers,
+                        num_heads,
+                        seq_len,
+                    )
+                    .unwrap()
             });
         });
 
-        let compressed =
-            compressor.compress(&k_cache, &v_cache, num_layers, num_heads, seq_len).unwrap();
+        let compressed = compressor
+            .compress(&k_cache, &v_cache, num_layers, num_heads, seq_len)
+            .unwrap();
         let label_d = format!("decompress_k{k_bits}v{v_bits}_L{num_layers}H{num_heads}S{seq_len}");
         group.bench_function(&label_d, |b| {
             b.iter(|| compressor.decompress(black_box(&compressed)).unwrap());

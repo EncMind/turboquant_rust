@@ -39,7 +39,9 @@ fn test_round_trip_shape() {
         .map(|_| StandardNormal.sample(&mut rng))
         .collect();
 
-    let compressed = compressor.compress(&k, &v, num_layers, num_heads, seq_len).unwrap();
+    let compressed = compressor
+        .compress(&k, &v, num_layers, num_heads, seq_len)
+        .unwrap();
     let (k_hat, v_hat) = compressor.decompress(&compressed).unwrap();
 
     assert_eq!(k_hat.len(), total);
@@ -79,7 +81,9 @@ fn test_round_trip_quality() {
         }
     }
 
-    let compressed = compressor.compress(&k, &v, num_layers, num_heads, seq_len).unwrap();
+    let compressed = compressor
+        .compress(&k, &v, num_layers, num_heads, seq_len)
+        .unwrap();
     let (k_hat, v_hat) = compressor.decompress(&compressed).unwrap();
 
     let k_mse: f64 = k

@@ -273,12 +273,12 @@ fn run_bench(dim: usize, count: usize) {
 /// Uses seeded random-normal inputs and the packed wire-format
 /// `quantize` / `dequantize` roundtrip.
 fn run_bench_json(dim: usize, count: usize, n_iter: usize, seed: u64) {
-    use turboquant_core::codebook;
-    use turboquant_core::rotation;
-    use turboquant_core::utils;
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use rand_distr::{Distribution, StandardNormal};
+    use turboquant_core::codebook;
+    use turboquant_core::rotation;
+    use turboquant_core::utils;
 
     fn draw_normal_vec(rng: &mut StdRng, len: usize) -> Vec<f64> {
         let normal = StandardNormal;
@@ -319,7 +319,11 @@ fn run_bench_json(dim: usize, count: usize, n_iter: usize, seed: u64) {
         let signs: Vec<i8> = (0..dim)
             .map(|_| {
                 let v: f64 = normal.sample(&mut rng);
-                if v >= 0.0 { 1 } else { -1 }
+                if v >= 0.0 {
+                    1
+                } else {
+                    -1
+                }
             })
             .collect();
         let start = Instant::now();
@@ -424,7 +428,8 @@ fn print_info(dim: usize) {
 
     // TurboQuant formats (wire-size metrics)
     for bits in [4u32, 3, 2] {
-        let compressor = turboquant_core::KvCacheCompressor::new(dim, bits, bits, 42, true).unwrap();
+        let compressor =
+            turboquant_core::KvCacheCompressor::new(dim, bits, bits, 42, true).unwrap();
         let stats = compressor.memory_stats(seq_len, num_layers, num_heads);
         let name = format!("turbo{bits}");
         println!(

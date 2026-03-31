@@ -25,5 +25,11 @@ Repository = "https://github.com/weiwang/turboquant_plus"
 Documentation = "https://docs.rs/turboquant-core"
 Changelog = "https://github.com/weiwang/turboquant_plus/blob/main/rust/CHANGELOG.md"
 
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.maturin]
 features = ["pyo3/extension-module"]
