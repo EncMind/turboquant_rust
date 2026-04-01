@@ -8,8 +8,8 @@
 
 use crate::error::{Result, TurboQuantError};
 use nalgebra::{DMatrix, DVector};
-use rand::Rng;
-use rand_distr::StandardNormal;
+use rand::{Rng, RngExt};
+use rand_distr::{Distribution, StandardNormal};
 
 /// Generate a Haar-distributed random rotation matrix via QR decomposition.
 ///
@@ -25,7 +25,7 @@ pub fn random_rotation_dense(d: usize, rng: &mut impl Rng) -> Result<DMatrix<f64
     }
 
     // Random Gaussian matrix
-    let g = DMatrix::from_fn(d, d, |_, _| rng.sample::<f64, _>(StandardNormal));
+    let g = DMatrix::from_fn(d, d, |_, _| StandardNormal.sample(rng));
 
     // QR decomposition
     let qr = g.qr();
@@ -42,7 +42,7 @@ pub fn random_rotation_dense(d: usize, rng: &mut impl Rng) -> Result<DMatrix<f64
     }
 
     // Ensure proper rotation (det = +1). Flip first column if det = -1.
-    let det = q.determinant();
+    let det: f64 = q.determinant();
     if det < 0.0 {
         for i in 0..d {
             q[(i, 0)] = -q[(i, 0)];

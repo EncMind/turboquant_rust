@@ -21,5 +21,5 @@ accelerate = ["turboquant-core/accelerate"]
 
 [dependencies]
 turboquant-core = { path = "../turboquant-core" }
-pyo3 = { version = "0.23", features = ["extension-module"] }
-numpy = "0.23"
+pyo3 = { version = "0.28", features = ["extension-module"] }
+numpy = "0.28"

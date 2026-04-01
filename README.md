@@ -6,7 +6,6 @@ KV cache compression in large language models.
 ## Crate Structure
 
 ```
-rust/
 ├── turboquant-core/    Pure Rust core library (all algorithms, 153 tests)
 ├── turboquant-py/      PyO3 Python bindings (drop-in accelerator)
 └── turboquant-cli/     CLI tool for demos and benchmarks
@@ -46,6 +45,7 @@ Rust built with `--features accelerate` (Apple Accelerate CBLAS).
 
 ```bash
 # 3-way comparison
+# in turboquant_plus repo
 python benchmarks/bench_comparison.py --dim 128 --count 1000 --iter 5000 --seed 42
 
 # Pure Rust standalone
@@ -125,26 +125,27 @@ above.
 ### Build & Test (Rust only — no Python needed)
 
 ```bash
-cd rust
 cargo test                  # Run all 153 Rust tests
 cargo build --release       # Build optimized binaries
 ```
 
 ### Build & Test (Python bindings)
 
-Requires: Python 3.9+, [maturin](https://maturin.rs/) (`pip install maturin`), numpy
+Requires: Python 3.9+, Rust toolchain
 
 ```bash
-cd rust/turboquant-py
+cd turboquant-py
 
-# Build and install the Rust extension into your Python environment
-pip install maturin
-maturin develop --release --features accelerate   # macOS (Apple Accelerate BLAS)
-maturin develop --release                          # Linux/other (pure Rust BLAS)
+# Create a clean virtual environment (avoids conflicts with system/conda Python)
+python3 -m venv .venv
+.venv/bin/pip install maturin numpy pytest
+
+# Build and install the Rust extension into the venv
+.venv/bin/maturin develop --release --features accelerate   # macOS (Apple Accelerate BLAS)
+.venv/bin/maturin develop --release                          # Linux/other (pure Rust BLAS)
 
 # Run PyO3 binding tests (40 tests covering 1D/2D/batch roundtrips)
-pip install pytest
-pytest tests/ -v
+.venv/bin/python -m pytest tests/ -v
 ```
 
 ### Run Benchmarks
@@ -187,7 +188,7 @@ k_hat, v_hat = compressor.decompress(compressed)
 
 ```toml
 [dependencies]
-turboquant-core = { path = "path/to/rust/turboquant-core" }
+turboquant-core = { path = "path/to/turboquant-core" }
 ```
 
 ```rust

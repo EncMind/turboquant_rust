@@ -2,3 +2,6 @@ target/
 **/*.so
 **/*.dylib
 **/*.pyd
+.venv/
+__pycache__/
+*.pyc

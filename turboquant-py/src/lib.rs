@@ -455,7 +455,7 @@ fn maybe_norms_to_py<'py>(
 ///
 /// Accepts 1D `(d,)` or 2D `(batch, d)` input. Returns matching shape.
 #[pyfunction]
-fn pack_bits<'py>(py: Python<'py>, signs: PyReadonlyArrayDyn<i8>) -> PyResult<PyObject> {
+fn pack_bits<'py>(py: Python<'py>, signs: PyReadonlyArrayDyn<i8>) -> PyResult<Py<PyAny>> {
     let shape = signs.shape();
     match shape.len() {
         1 => {
@@ -487,7 +487,7 @@ fn pack_bits<'py>(py: Python<'py>, signs: PyReadonlyArrayDyn<i8>) -> PyResult<Py
 ///
 /// Accepts 1D `(packed_d,)` or 2D `(batch, packed_d)` input. Returns matching shape.
 #[pyfunction]
-fn unpack_bits<'py>(py: Python<'py>, packed: PyReadonlyArrayDyn<u8>, d: usize) -> PyResult<PyObject> {
+fn unpack_bits<'py>(py: Python<'py>, packed: PyReadonlyArrayDyn<u8>, d: usize) -> PyResult<Py<PyAny>> {
     let shape = packed.shape();
     match shape.len() {
         1 => {
@@ -565,7 +565,7 @@ fn nearest_centroid_indices<'py>(
     py: Python<'py>,
     values: PyReadonlyArrayDyn<f64>,
     centroids: PyReadonlyArray1<f64>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let c = centroids.as_slice().map_err(|_| {
         PyValueError::new_err("centroids must be a contiguous 1D NumPy array of float64")
     })?;
